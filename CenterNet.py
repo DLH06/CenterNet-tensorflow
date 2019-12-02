@@ -70,7 +70,7 @@ class CenterNet:
         self.lr = tf.placeholder(dtype=tf.float32, shape=[], name='lr')
 
     def _build_graph(self):
-        with tf.variable_scope('backone'):
+        with tf.variable_scope('backbone'):
             conv = self._conv_bn_activation(
                 bottom=self.images,
                 filters=16,
@@ -205,6 +205,8 @@ class CenterNet:
         size = tf.gather_nd(size, ngbbox_yx_round_int)
         offset_loss = tf.reduce_mean(tf.abs(offset_gt - offset))
         size_loss = tf.reduce_mean(tf.abs(size_gt - size))
+        offset_loss = tf.cond(tf.cast(slice_index, tf.bool), lambda: offset_loss, lambda: tf.zeros_like(offset_loss, tf.float32))
+        size_loss = tf.cond(tf.cast(slice_index, tf.bool), lambda: size_loss, lambda: tf.zeros_like(size_loss, tf.float32))
         total_loss = keypoints_loss + 0.1*size_loss + offset_loss
         return total_loss
 
@@ -247,6 +249,7 @@ class CenterNet:
         gt_keypoints = tf.concat(gt_keypoints, axis=-1)
         keypoints_pos_loss = -tf.pow(1.-tf.sigmoid(keypoints), 2.) * tf.log_sigmoid(keypoints) * gt_keypoints
         keypoints_neg_loss = -tf.pow(1.-reduction, 4) * tf.pow(tf.sigmoid(keypoints), 2.) * (-keypoints+tf.log_sigmoid(keypoints)) * (1.-gt_keypoints)
+        num_g = tf.maximum(num_g, tf.ones_like(num_g, dtype=tf.int32))
         keypoints_loss = tf.reduce_sum(keypoints_pos_loss) / tf.cast(num_g, tf.float32) + tf.reduce_sum(keypoints_neg_loss) / tf.cast(num_g, tf.float32)
         return keypoints_loss
 
@@ -276,7 +279,7 @@ class CenterNet:
             self.sess.run(self.train_initializer)
 
     def _create_saver(self):
-        weights = tf.trainable_variables('backone')
+        weights = tf.trainable_variables('backbone')
         self.pretrained_saver = tf.train.Saver(weights)
         self.saver = tf.train.Saver()
         self.best_saver = tf.train.Saver()
@@ -293,10 +296,11 @@ class CenterNet:
         num_iters = self.num_train // self.batch_size
         for i in range(num_iters):
             _, loss = self.sess.run([self.train_op, self.loss], feed_dict={self.lr: lr})
-            sys.stdout.write('\r>> ' + 'iters '+str(i+1)+str('/')+str(num_iters)+' loss '+str(loss))
-            sys.stdout.flush()
+            # sys.stdout.write('\r>> ' + 'iters '+str(i+1)+str('/')+str(num_iters)+' loss '+str(loss))
+            # sys.stdout.flush()
+            print('iter_{}: {}'.format(i, loss))
             mean_loss.append(loss)
-        sys.stdout.write('\n')
+        # sys.stdout.write('\n')
         mean_loss = np.mean(mean_loss)
         return mean_loss
 
@@ -363,7 +367,7 @@ class CenterNet:
         return bn
 
     def _separable_conv_layer(self, bottom, filters, kernel_size, strides, activation=tf.nn.relu):
-        conv = tf.layers.separable_conv2d(
+        conv = tf.layer.separable_conv2d(
             inputs=bottom,
             filters=filters,
             kernel_size=kernel_size,
