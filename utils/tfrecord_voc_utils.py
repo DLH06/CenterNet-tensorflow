@@ -8,8 +8,8 @@ import numpy as np
 import warnings
 import math
 import sys
-from utils.voc_classname_encoder import classname_to_ids
-from utils.image_augmentor import image_augmentor
+from voc_classname_encoder import classname_to_ids
+from image_augmentor import image_augmentor
 
 
 def int64_feature(values):
@@ -103,7 +103,8 @@ def parse_function(data, config):
         shape = tf.reshape(shape, [3])
         ground_truth = tf.reshape(ground_truth, [-1, 5])
         images = tf.image.decode_jpeg(features['image'], channels=3)
-        images = tf.cast(tf.reshape(images, shape), tf.float32)
+        # images = tf.cast(tf.reshape(images, shape), tf.float32)
+        images = tf.cast(images, tf.float32)
         images, ground_truth = image_augmentor(image=images,
                                                input_shape=shape,
                                                ground_truth=ground_truth,
